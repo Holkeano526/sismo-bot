@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Alertas Sismológicas</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            transition: background-color 0.3s;
+        }
+
+        .container {
+            text-align: center;
+            padding: 40px;
+            border-radius: 12px;
+            background: #1e1e1e;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            max-width: 600px;
+            width: 90%;
+            border: 2px solid #333;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .status {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #4CAF50; /* Verde por defecto */
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .alert-details {
+            display: none; /* Oculto por defecto */
+            text-align: left;
+            background: rgba(0,0,0,0.3);
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 1.1rem;
+            line-height: 1.6;
+        }
+
+        /* Clases para el estado de Alarma */
+        .alarm-active body {
+            background-color: #ff0000;
+            animation: pulse-bg 1s infinite alternate;
+        }
+
+        .alarm-active .container {
+            border-color: #ff3333;
+            box-shadow: 0 0 30px rgba(255, 0, 0, 0.8);
+        }
+
+        .alarm-active .status {
+            color: #ff3333;
+            font-size: 2rem;
+            animation: blink-text 0.5s infinite alternate;
+        }
+
+        .alarm-active .alert-details {
+            display: block;
+        }
+
+        @keyframes pulse-bg {
+            0% { background-color: #3d0000; }
+            100% { background-color: #8b0000; }
+        }
+
+        @keyframes blink-text {
+            0% { opacity: 1; }
+            100% { opacity: 0.2; }
+        }
+
+        .reset-btn {
+            display: none;
+            margin-top: 25px;
+            padding: 10px 25px;
+            font-size: 1.2rem;
+            color: white;
+            background-color: #333;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .reset-btn:hover {
+            background-color: #555;
+        }
+        
+        .alarm-active .reset-btn {
+            display: inline-block;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container" id="dashboard">
+        <h1>Centro de Monitoreo Local</h1>
+        
+        <div id="scanIndicator" style="font-size: 0.9rem; color: #888; margin-bottom: 20px;">
+            <span class="dot" id="scanDot" style="display:inline-block; width:8px; height:8px; background-color:#555; border-radius:50%; margin-right:5px;"></span>
+            <span id="scanText">Esperando conexión con USGS...</span>
+        </div>
+
+        <div class="status" id="statusText">SISTEMA NORMAL</div>
+        
+        <div class="alert-details" id="alertDetails">
+            <!-- Aquí se inyectarán los datos de la alerta -->
+        </div>
+
+        <button class="reset-btn" onclick="resetDashboard()">Silenciar Alarma</button>
+    </div>
+
+    <script>
+        // Establecer conexión SSE (Server-Sent Events) con el servidor
+        const evtSource = new EventSource("/stream");
+
+        evtSource.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === "heartbeat") {
+                // Actualizar indicador de escaneo
+                const scanText = document.getElementById("scanText");
+                const scanDot = document.getElementById("scanDot");
+                
+                scanText.innerText = "Escaneando en tiempo real. Última comprobación: " + data.time;
+                scanDot.style.backgroundColor = "#4CAF50"; // Verde
+                
+                // Efecto de parpadeo del punto
+                setTimeout(() => { scanDot.style.backgroundColor = "#555"; }, 1000);
+            } else {
+                // Es un sismo
+                console.log("Nueva alerta recibida:", data);
+                triggerAlarm(data);
+            }
+        };
+
+        evtSource.onerror = function(err) {
+            console.error("Error en la conexión SSE:", err);
+            document.getElementById("scanText").innerText = "Conexión perdida. Reintentando...";
+            document.getElementById("scanDot").style.backgroundColor = "#ff0000";
+        };
+
+        function triggerAlarm(data) {
+            // Cambiar clases para activar la animación roja
+            document.body.classList.add('alarm-active');
+            
+            // Actualizar el texto
+            document.getElementById('statusText').innerText = "¡ALERTA SÍSMICA DETECTADA!";
+            
+            // Formatear detalles
+            const detailsDiv = document.getElementById('alertDetails');
+            
+            if (data.is_real_data) {
+                // Convert UTC string (ISO) to local browser time
+                const dateObj = new Date(data.timestamp);
+                const localTimeStr = isNaN(dateObj) ? data.timestamp + " UTC" : dateObj.toLocaleString();
+
+                // Formato para data real del USGS/EMSC/GFZ
+                let magColor = data.mag >= 4.5 ? '#ff3333' : (data.mag >= 3.0 ? '#ff9900' : '#4CAF50');
+                detailsDiv.innerHTML = `
+                    <div style="font-size: 1.8rem; margin-bottom: 10px;">
+                        <strong>Magnitud:</strong> <span style="color: ${magColor}; font-weight: bold; background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px;">${data.mag}</span>
+                    </div>
+                    <strong>Lugar:</strong> ${data.place}<br>
+                    <strong>Hora de origen del sismo (tu hora local):</strong> ${localTimeStr}<br>
+                    <strong>Fuente:</strong> ${data.station}
+                `;
+            } else {
+                // Formato original (simulacro)
+                detailsDiv.innerHTML = `
+                    <strong>Hora:</strong> ${data.timestamp || 'N/A'}<br>
+                    <strong>Estación:</strong> ${data.station || 'Raspberry Shake Local'}<br>
+                    <strong>Mensaje:</strong> ${data.text || data.mensaje || 'Evento confirmado por STA/LTA'}
+                `;
+            }
+        }
+
+        function resetDashboard() {
+            // Restaurar a la normalidad
+            document.body.classList.remove('alarm-active');
+            document.getElementById('statusText').innerText = "SISTEMA NORMAL";
+            document.getElementById('alertDetails').style.display = "none";
+        }
+    </script>
+</body>
+</html>

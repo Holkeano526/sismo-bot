@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.env
+state.json
+state*.json
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+.gemini/

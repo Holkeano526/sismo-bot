@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  quake-telegram-bot:
+    build: .
+    container_name: usgs_quake_bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - MIN_MAGNITUDE=4.5
+      - POLL_INTERVAL=60
+      - TZ=America/Lima
